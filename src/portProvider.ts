@@ -19,7 +19,12 @@ export class PortProvider implements vscode.TreeDataProvider<PortItem> {
 
     setFilter(filter: string) {
         this.filter = filter.toLowerCase();
+        vscode.commands.executeCommand('setContext', 'xport:hasFilter', !!this.filter);
         this.refresh();
+    }
+    
+    clearFilter() {
+        this.setFilter('');
     }
 
     getTreeItem(element: PortItem): vscode.TreeItem {

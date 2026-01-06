@@ -3,6 +3,9 @@ import { PortProvider, PortItem } from './portProvider';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('XPort 插件已激活');
+    
+    // Initialize context key
+    vscode.commands.executeCommand('setContext', 'xport:hasFilter', false);
 
     const portProvider = new PortProvider();
 
@@ -49,6 +52,12 @@ export function activate(context: vscode.ExtensionContext) {
             if (value !== undefined) {
                 portProvider.setFilter(value);
             }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('xport.clearSearch', () => {
+            portProvider.clearFilter();
         })
     );
 }

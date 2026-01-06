@@ -112,6 +112,29 @@ export class PortManager {
         });
     }
 
+    private unescapeName(name: string): string {
+        // 处理lsof输出中的转义序列，如\x20表示空格，\xYY表示其他字符
+        // 直接使用正则表达式全局替换所有的\xXX转义序列
+        return name.replace(/\\x([0-9A-Fa-f]{2})/g, (match, hex) => {
+            // 将十六进制字符串转换为十进制数字
+            const charCode = parseInt(hex, 16);
+            
+            // 特殊处理空格字符，因为空格在显示时容易被忽略
+            if (charCode === 0x20) {
+                return ' '; // 直接返回空格
+            }
+            
+            // 对于其他字符，尝试转换为对应的字符
+            try {
+                // 使用String.fromCharCode直接转换
+                return String.fromCharCode(charCode);
+            } catch (e) {
+                // 如果转换失败，返回原始匹配
+                return match;
+            }
+        }).replace(/�/g, '未知'); // 可选：移除无效字符标记
+    }
+
     private async fillProcessNamesWindows(ports: PortInfo[]): Promise<PortInfo[]> {
         // We can use `tasklist` to get all processes and map them, which is faster than one by one.
         // `tasklist /FO CSV`
@@ -141,6 +164,7 @@ export class PortManager {
                 for (const p of ports) {
                     if (pidMap.has(p.pid)) {
                         p.processName = pidMap.get(p.pid)!;
+                        p.processName = this.unescapeName(p.processName);
                     }
                 }
                 resolve(ports);
@@ -225,7 +249,7 @@ export class PortManager {
                     ports.push({
                         port,
                         pid: parseInt(pidStr, 10),
-                        processName: command,
+                        processName: this.unescapeName(command),
                         protocol: isUDP ? 'UDP' : 'TCP'
                     });
                 }
