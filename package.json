@@ -2,7 +2,7 @@
   "name": "xport-manager",
   "displayName": "端口管理器 (Port Manager)",
   "description": "Visual Studio Code 的端口管理插件，支持查看端口、进程名称、PID，并可停止进程。",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "nocmt",
   "engines": {
     "vscode": "^1.90.0"

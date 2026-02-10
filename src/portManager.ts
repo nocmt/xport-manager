@@ -43,8 +43,10 @@ export class PortManager {
 
     private getPortsWindows(): Promise<PortInfo[]> {
         return new Promise((resolve, reject) => {
-            // netstat -ano
-            cp.exec('netstat -ano', (err, stdout) => {
+            // netstat -anoq
+            // -q: Displays all connections, listening ports, and bound nonlistening TCP ports.
+            // Bound ports may or may not be associated with an active connection.
+            cp.exec('netstat -anoq', (err, stdout) => {
                 if (err) {
                     // netstat might fail if not in path, but usually it is.
                     // resolve empty if fails? or reject?
@@ -60,6 +62,7 @@ export class PortManager {
                 // Skip header lines
                 // Proto  Local Address          Foreign Address        State           PID
                 // TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1234
+                // TCP    0.0.0.0:6379           0.0.0.0:0              BOUND           5678
 
                 for (const line of lines) {
                     const parts = line.trim().split(/\s+/);
@@ -72,8 +75,11 @@ export class PortManager {
 
                     if (!/^\d+$/.test(pidStr)) continue; // PID must be number
 
-                    // We mainly care about LISTENING ports for TCP
-                    if (proto.toUpperCase().startsWith('TCP') && state.toUpperCase() !== 'LISTENING') {
+                    // We mainly care about LISTENING ports for TCP, and BOUND ports if visible
+                    const stateUpper = state.toUpperCase();
+                    if (proto.toUpperCase().startsWith('TCP') && 
+                        stateUpper !== 'LISTENING' && 
+                        stateUpper !== 'BOUND') {
                         continue;
                     }
                     
@@ -96,7 +102,7 @@ export class PortManager {
                         port,
                         pid,
                         processName: '', // Will fetch later
-                        protocol: proto
+                        protocol: proto + (stateUpper === 'BOUND' ? ' (BOUND)' : '')
                     });
                 }
 
@@ -113,26 +119,26 @@ export class PortManager {
     }
 
     private unescapeName(name: string): string {
-        // 处理lsof输出中的转义序列，如\x20表示空格，\xYY表示其他字符
-        // 直接使用正则表达式全局替换所有的\xXX转义序列
-        return name.replace(/\\x([0-9A-Fa-f]{2})/g, (match, hex) => {
-            // 将十六进制字符串转换为十进制数字
-            const charCode = parseInt(hex, 16);
-            
-            // 特殊处理空格字符，因为空格在显示时容易被忽略
-            if (charCode === 0x20) {
-                return ' '; // 直接返回空格
+        // Handle lsof output escapes like \x20 for space, \xYY for other chars
+        // We need to group consecutive escapes to decode UTF-8 sequences correctly
+        return name.replace(/(?:\\x[0-9A-Fa-f]{2})+/g, (match) => {
+            const bytes: number[] = [];
+            let i = 0;
+            while (i < match.length) {
+                if (match.startsWith('\\x', i)) {
+                    const hex = match.substring(i + 2, i + 4);
+                    bytes.push(parseInt(hex, 16));
+                    i += 4;
+                } else {
+                    i++;
+                }
             }
-            
-            // 对于其他字符，尝试转换为对应的字符
             try {
-                // 使用String.fromCharCode直接转换
-                return String.fromCharCode(charCode);
+                return Buffer.from(bytes).toString('utf8');
             } catch (e) {
-                // 如果转换失败，返回原始匹配
                 return match;
             }
-        }).replace(/�/g, '未知'); // 可选：移除无效字符标记
+        });
     }
 
     private async fillProcessNamesWindows(ports: PortInfo[]): Promise<PortInfo[]> {
